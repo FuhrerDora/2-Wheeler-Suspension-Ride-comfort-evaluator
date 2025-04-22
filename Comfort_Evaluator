@@ -1,0 +1,105 @@
+function comfort=pasu(FAZv, FBZv, FCZv, FDZv, RAZv, RBZv, RCZv, RDZv, FAXv, FBXv, FCXv, FDXv, RAXv, RBXv, RCXv, RDXv)
+
+	freq_limit=1000; %rad/s
+	a=4;
+	b=4;
+	p=1530;
+	
+	Sx=zeros(freq_limit,1);
+	Sz=zeros(freq_limit,1);
+	n1=2;
+	n2=1.5;
+	k=1;
+	S0=[16e-6 64e-6 256e-6]; %Road classes PSD
+	mix=[0.42 0.37 0.21]; %Road class weightage
+	
+	vkmph=[35 70; 20 55; 15 40]; %min max speed for each road class
+
+	%Response in x
+	for rclass=1:3
+		vmmps_max=vkmph(rclass,2)*277.78;
+		vmmps_min=vkmph(rclass,1)*277.78;
+		v_vec=277.78*linspace(vkmph(rclass,1), vkmph(rclass,2), 100);
+		v_norm=(v_vec-vmmps_min)/(vmmps_max-vmmps_min);
+		pdfv=betapdf(v_norm, a, b);
+		pdfv_norm=pdfv/trapz(v_vec,pdfv);
+		Stempx=zeros(length(v_vec),1);
+		Stempz=zeros(length(v_vec),1);
+		for q=1:freq_limit
+			s=1i*q;
+			numfx=polyval(fnumx,s);
+			denfx=polyval(fdenx,s);
+			numrx=polyval(rnumx,s);
+			denrx=polyval(rdenx,s);
+			ftfx(q)=numfx/denfx;
+			rtfx(q)=numrx/denrx;
+			rtf_phased_tmp2x=0;
+			for vv=1:length(v_vec)
+				if q/(v_vec(vv))>k
+					n=n2;
+				else n=n1;
+				end
+				dv=v_vec(2)-v_vec(1);
+				Stempx=(S0(rclass)/v_vec(vv))*(v_vec(vv)*k/(q))^n;
+				Sx(q)=Sx(q)+Stempx*pdfv_norm(vv)*dv;
+				ratiox=p/v_vec(vv);
+				rtf_phased_tmpx=rtfx(q)*(e^-(1i*q*ratiox));
+				rtf_phased_tmp2x=rtf_phased_tmp2x+(rtf_phased_tmpx*pdfv_norm(vv)*dv);
+			end
+			rtf_phasedx(q)=rtf_phased_tmp2x;
+			pasu_unphasedx(q)=ftfx(q)+abs(rtfx(q));
+			pasux(q)=ftfx(q)+rtf_phasedx(q);
+			responsex(q,rclass)=abs(pasu_unphasedx(q))^2*Sx(q);
+		end
+	end
+
+	%Response in z
+	for rclass=1:3
+		vmmps_max=vkmph(rclass,2)*277.78;
+		vmmps_min=vkmph(rclass,1)*277.78;
+		v_vec=277.78*linspace(vkmph(rclass,1), vkmph(rclass,2), 100);
+		v_norm=(v_vec-vmmps_min)/(vmmps_max-vmmps_min);
+		pdfv=betapdf(v_norm, a, b);
+		pdfv_norm=pdfv/trapz(v_vec,pdfv);
+		Stempx=zeros(length(v_vec),1);
+		Stempz=zeros(length(v_vec),1);
+		for q=1:freq_limit
+			s=1i*q;
+			numfz=polyval(fnumz,s);
+			denfz=polyval(fdenz,s);
+			numrz=polyval(rnumz,s);
+			denrz=polyval(rdenz,s);
+			ftfz(q)=numfz/denfz;
+			rtfz(q)=numrz/denrz;
+			rtf_phased_tmp2z=0;
+			for vv=1:length(v_vec)
+				if q/(v_vec(vv))>k
+					n=n2;
+				else n=n1;
+				end
+				dv=v_vec(2)-v_vec(1);
+				Stempz=(S0(rclass)/v_vec(vv))*(v_vec(vv)*k/(q))^n;
+				Sz(q)=Sz(q)+Stempz*pdfv_norm(vv)*dv;
+				ratioz=p/v_vec(vv);
+				rtf_phased_tmpz=rtfz(q)*(e^-(1i*q*ratioz));
+				rtf_phased_tmp2z=rtf_phased_tmp2z+(rtf_phased_tmpz*pdfv_norm(vv)*dv);
+			end
+			rtf_phasedz(q)=rtf_phased_tmp2z;
+			pasu_unphasedz(q)=ftfz(q)+rtfz(q);
+			pasuz(q)=ftfz(q)+rtf_phasedz(q);
+			responsez(q,rclass)=abs(pasu_unphasedz(q))^2*Sz(q);
+		end
+	end
+	x=linspace(1/6.28, freq_limit/6.28, 1000);
+	objx=0;
+	objz=0;
+	kx=1.4;
+	
+	for rclass=1:3
+		areax=trapz(x, responsex(:,rclass))*mix(rclass);
+		areaz=trapz(x, responsez(:,rclass))*mix(rclass);
+		objx=objx+areax;
+		objz=objz+areaz;
+	end
+	comfort=k*objx+objz
+end
